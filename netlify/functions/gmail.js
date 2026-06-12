@@ -55,14 +55,21 @@ async function sendEmail(gmail, body) {
       });
     } else if (att.url) {
       // ex : CGS hébergées sur le site -> on les télécharge puis on les encode
-      const r = await fetch(att.url);
-      if (!r.ok) throw new Error(`Impossible de récupérer la pièce jointe ${att.filename} (HTTP ${r.status})`);
-      const buf = Buffer.from(await r.arrayBuffer());
-      preparedAttachments.push({
-        filename: att.filename,
-        mimeType: att.mimeType || 'application/pdf',
-        data: buf.toString('base64'),
-      });
+      try {
+        const r = await fetch(att.url);
+        if (!r.ok) {
+          console.warn(`Pièce jointe optionnelle introuvable (${att.filename}, HTTP ${r.status}) — envoi sans cette pièce jointe`);
+          continue;
+        }
+        const buf = Buffer.from(await r.arrayBuffer());
+        preparedAttachments.push({
+          filename: att.filename,
+          mimeType: att.mimeType || 'application/pdf',
+          data: buf.toString('base64'),
+        });
+      } catch (e) {
+        console.warn(`Pièce jointe optionnelle inaccessible (${att.filename}) — envoi sans cette pièce jointe`, e);
+      }
     }
   }
 
