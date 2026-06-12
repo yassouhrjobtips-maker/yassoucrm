@@ -1,0 +1,10 @@
+{
+  "name": "yassou-career-functions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fonctions backend Netlify pour le tableau de bord Yassou Career (Gmail, Google Calendar, Stripe)",
+  "dependencies": {
+    "googleapis": "^140.0.0",
+    "stripe": "^16.0.0"
+  }
+}
