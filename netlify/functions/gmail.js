@@ -22,10 +22,11 @@ exports.handler = async (event) => {
     const auth = await getAuthorizedClient();
     const gmail = google.gmail({ version: 'v1', auth });
 
-    if (body.action === 'send') return await sendEmail(gmail, body);
-    if (body.action === 'thread') return await getThread(gmail, body);
+    const action = body.action || 'send';
+    if (action === 'send') return await sendEmail(gmail, body);
+    if (action === 'thread') return await getThread(gmail, body);
 
-    return json(400, { error: 'Action inconnue : ' + body.action });
+    return json(400, { error: 'Action inconnue : ' + action });
   } catch (err) {
     return json(500, { error: err.message });
   }
