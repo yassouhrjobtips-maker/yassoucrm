@@ -35,6 +35,7 @@ exports.handler = async (event) => {
 
   try {
     const accessToken = await getAccessToken();
+    console.log('✅ Access token obtenu');
 
     if (action === 'send') {
       return await sendEmail(accessToken, payload);
@@ -44,7 +45,20 @@ exports.handler = async (event) => {
     }
     return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Action inconnue : '" + action + "'" }) };
   } catch (err) {
-    return { statusCode: 500, headers: CORS_HEADERS, body: JSON.stringify({ error: err.message }) };
+    console.error('❌ Erreur gmail function:', err.message, err.stack);
+    return { 
+      statusCode: 500, 
+      headers: CORS_HEADERS, 
+      body: JSON.stringify({ 
+        error: err.message,
+        stack: err.stack,
+        env_check: {
+          has_client_id: !!process.env.GOOGLE_CLIENT_ID,
+          has_client_secret: !!process.env.GOOGLE_CLIENT_SECRET,
+          has_refresh_token: !!process.env.GOOGLE_REFRESH_TOKEN,
+        }
+      }) 
+    };
   }
 };
 
