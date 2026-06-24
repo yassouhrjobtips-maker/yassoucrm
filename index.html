@@ -1007,12 +1007,11 @@ select{cursor:pointer}
       </div>
       <div id="gmail-extra"></div>
       <div id="gmail-preview-wrap" style="display:none;margin-top:8px">
-        <div style="font-size:11.5px;font-weight:600;color:var(--txt-2);margin-bottom:6px">✏️ Corps du message <span style="font-weight:400;color:var(--txt-3)">(modifiable directement)</span></div>
-        <textarea id="gmail-preview" rows="12" style="width:100%;font-size:12.5px;line-height:1.65;color:var(--txt-2);background:var(--off);border:1px solid var(--line);border-radius:11px;padding:14px;resize:vertical;font-family:'DM Sans'"></textarea>
+        <div style="font-size:11.5px;font-weight:600;color:var(--txt-2);margin-bottom:6px">Aperçu du message</div>
+        <div class="gmail-preview" id="gmail-preview"></div>
         <div style="margin-top:10px">
-          <label style="font-size:11.5px;font-weight:600;color:var(--txt-2);display:block;margin-bottom:5px">📎 Pièces jointes (optionnel)</label>
-          <input type="file" id="gmail-attachments" multiple style="font-size:12px;width:100%">
-          <div id="gmail-attachments-list" style="margin-top:6px;font-size:11.5px;color:var(--txt-3)"></div>
+          <label style="font-size:11.5px;font-weight:600;color:var(--txt-2);display:block;margin-bottom:5px">Ajouter une note personnalisée (optionnel)</label>
+          <textarea id="gmail-note" rows="2" placeholder="Ex : RDV Google Meet lundi à 18h…" style="width:100%"></textarea>
         </div>
       </div>
       <div id="gmail-status" style="display:none"></div>
@@ -2523,8 +2522,8 @@ function openGmailModal(clientId){
   document.getElementById('gmail-extra').innerHTML='';
   document.getElementById('gmail-status').style.display='none';
   document.getElementById('gmail-send-btn').disabled=true;
-  const previewEl=document.getElementById('gmail-preview');
-  previewEl.dataset.lastType='';
+  document.getElementById('gmail-note').value='';
+  // reset selected
   document.querySelectorAll('.gmail-type').forEach(el=>el.classList.remove('selected'));
   openModal('modal-gmail');
 }
@@ -2553,7 +2552,8 @@ function renderGmailExtra(type,c){
     html=`<div class="field"><label>Service qui l'intéressait</label>
       <select id="gx-service"><option value="">— Non précisé —</option>${opts}</select></div>`;
   } else if(type==='livraison'){
-    html=`<div class="field" style="font-size:12px;color:var(--txt-2);padding:8px 11px;background:var(--off);border-radius:9px">💡 Utilise le champ "Pièces jointes" ci-dessous pour joindre tes livrables (CV, LinkedIn…).</div>`;
+    html=`<div class="field"><label>📎 Fichier(s) à joindre (depuis ton ordinateur)</label>
+      <input type="file" id="gx-files" multiple></div>`;
   }
   el.innerHTML=html;
   el.querySelectorAll('input,select').forEach(inp=>{
@@ -2570,7 +2570,6 @@ function getGmailExtra(){
   const sl=document.getElementById('gx-stripe-svc'); if(sl&&sl.value) extra.stripeSvc=sl.value;
   const sv=document.getElementById('gx-service'); if(sv&&sv.value) extra.serviceKey=sv.value;
   const fl=document.getElementById('gx-files');
-  // Note: main file attachments are handled via #gmail-attachments (global field)
   if(fl&&fl.files&&fl.files.length){ extra.files=fl.files; extra.fileNames=Array.from(fl.files).map(f=>f.name); }
   return extra;
 }
@@ -2579,8 +2578,7 @@ function updateGmailPreview(){
   const c=STATE.clients[gmailClientId];
   const tmpl=GMAIL_TEMPLATES[gmailSelectedType];
   const extra=getGmailExtra();
-  const previewEl=document.getElementById('gmail-preview');
-  if(previewEl.dataset.lastType!==gmailSelectedType){previewEl.value=tmpl.body(c,extra);previewEl.dataset.lastType=gmailSelectedType;}
+  document.getElementById('gmail-preview').textContent=tmpl.body(c,extra);
 }
 
 function fileToBase64(file){
@@ -2596,12 +2594,6 @@ function selectGmailType(type){
   gmailSelectedType=type;
   document.querySelectorAll('.gmail-type').forEach(el=>el.classList.toggle('selected',el.dataset.type===type));
   const c=STATE.clients[gmailClientId];
-  // Force preview refresh for new type
-  const previewEl=document.getElementById('gmail-preview');
-  previewEl.dataset.lastType='';
-  // Reset attachments
-  const attEl=document.getElementById('gmail-attachments');
-  if(attEl){attEl.value='';document.getElementById('gmail-attachments-list').textContent='';}
   renderGmailExtra(type,c);
   updateGmailPreview();
   document.getElementById('gmail-preview-wrap').style.display='block';
@@ -2614,8 +2606,8 @@ async function sendGmail(){
   const c=STATE.clients[gmailClientId];
   const tmpl=GMAIL_TEMPLATES[gmailSelectedType];
   const extra=getGmailExtra();
-  // Use the editable textarea content as the actual body
-  const body=document.getElementById('gmail-preview').value;
+  const note=document.getElementById('gmail-note').value.trim();
+  const body=tmpl.body(c,extra)+(note?'\n\nNote ajoutée : '+note:'');
   const subject=tmpl.subject(c);
 
   const statusEl=document.getElementById('gmail-status');
@@ -2634,15 +2626,9 @@ async function sendGmail(){
         url: location.origin + '/Conditions_Generales_Yassou_Career.pdf'
       });
     }
-    // Global attachments field (tous types)
-    const globalFiles=document.getElementById('gmail-attachments');
-    const allFiles=[
-      ...(globalFiles&&globalFiles.files?Array.from(globalFiles.files):[]),
-      ...(extra.files?Array.from(extra.files):[])
-    ];
-    if(allFiles.length){
+    if(gmailSelectedType==='livraison' && extra.files && extra.files.length){
       statusEl.innerHTML='<div class="spinner"></div> Préparation des pièces jointes…';
-      for(const file of allFiles){
+      for(const file of extra.files){
         const data=await fileToBase64(file);
         attachments.push({filename:file.name, mimeType:file.type||'application/octet-stream', data});
       }
@@ -2901,36 +2887,6 @@ function stripeClientLink(clientId) {
   openCreateLinkModal();
   setTimeout(() => { document.getElementById('sc-name').value = c.name; }, 100);
 }
-
-/* ============ DISABLE AUTOCORRECT GLOBALLY ============ */
-document.addEventListener('DOMContentLoaded',()=>{
-  function disableAutoCorrect(el){
-    el.setAttribute('autocomplete','off');
-    el.setAttribute('autocorrect','off');
-    el.setAttribute('autocapitalize','off');
-    el.setAttribute('spellcheck','false');
-  }
-  document.querySelectorAll('input[type="text"],input:not([type]),textarea').forEach(disableAutoCorrect);
-  const obs=new MutationObserver(muts=>{
-    muts.forEach(m=>m.addedNodes.forEach(n=>{
-      if(n.nodeType!==1) return;
-      if(n.matches&&(n.matches('input[type="text"],input:not([type]),textarea'))) disableAutoCorrect(n);
-      n.querySelectorAll&&n.querySelectorAll('input[type="text"],input:not([type]),textarea').forEach(disableAutoCorrect);
-    }));
-  });
-  obs.observe(document.body,{childList:true,subtree:true});
-
-  // Display selected file names for global attachment field
-  document.addEventListener('change',e=>{
-    if(e.target&&e.target.id==='gmail-attachments'){
-      const listEl=document.getElementById('gmail-attachments-list');
-      if(!listEl) return;
-      const files=Array.from(e.target.files);
-      if(!files.length){listEl.textContent='';return;}
-      listEl.innerHTML=files.map(f=>`<span style="display:inline-block;background:var(--off-2);border-radius:6px;padding:2px 8px;margin:3px 3px 0 0;font-size:11px">📎 ${f.name}</span>`).join('');
-    }
-  });
-});
 
 /* ============ INIT ============ */
 function renderAll(){
